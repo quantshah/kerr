@@ -57,8 +57,8 @@ class Kerr(object):
         self.g = g
         self.c = c
 
-        self.m = self.convergence()
-        self.N = None
+        self.m = self._convergence()
+        self.N = self.normalization(self.m)
 
     def fm(self, m):
         """
@@ -88,12 +88,14 @@ class Kerr(object):
         return (coeff * hyp)
 
 
-    def _convergence(self, closed_form=False, tol=1e-6):
+    def _convergence(self, func = None, closed_form=False, tol=1e-6):
         """
-        Calculate the value of m for convergence
+        Calculate the value of m for convergence of the given function
 
         Parameters
         ----------
+        func: function
+            A function for which the convergence needs to be determined
         closed_form: bool
             If F = 0, use the closed form expression
 
@@ -102,29 +104,25 @@ class Kerr(object):
         m: int
             The value of m for convergence
         """
-        num_sum = lambda k: (np.power(2, k)/factorial(k)) * np.power(np.absolute(self.fm(k+1)), 2)
-        den_sum = lambda k: (np.power(2, k)/factorial(k)) * np.power(np.absolute(self.fm(k)), 2)
-
+        if func == None:
+            func = self.normalization
         i = 0
-        M_current = num_sum(i)/den_sum(i)
-        i += 1
-        M_next = num_sum(i)/den_sum(i)
+        M_current = func(i)
+        M_next = func(i+1)
 
         while(np.absolute(M_next - M_current) > tol):
             M_current = M_next
+            M_next = func(i+1)
             i += 1
-            M_next = num_sum(i)/den_sum(i)
 
         return i
 
 
-    def normalization(self):
+    def normalization(self, m = 1):
         """
         The normalization constant calculated using the formula
 
         $$N = \sum_{m=0}^\inf \frac{2^m}{m!} |F_m(f, g,c)|^2$$
-
-        The value of m is calculated until convergence and stored.
 
         Returns
         -------
@@ -132,14 +130,15 @@ class Kerr(object):
             The normalization constant calculated till convergence upto m.
         """
         f, g, c = self.f, self.g, self.c
+
         coefficient = lambda x: np.power(2, x)/factorial(x)
 
         N = 0.
 
         for k in range(0, m+1):
-            N += coefficient(m) * np.absolute(self.fm(m))
+            N += coefficient(k) * np.absolute(self.fm(k))
 
-        return N_new, m
+        return N
 
 
     def correlation(i, j):
@@ -164,14 +163,8 @@ class Kerr(object):
         """
         f, g, c = self.f, self.g, self.c
 
-        if self.N is None:
-            self.N, self.m = self.normalization()
-            N = self.N
-            m = self.m
-
-        else:
-            N = self.N
-            m = self.m
+        m = self.m
+        N = self.N
 
         corr = 0
 
@@ -185,7 +178,7 @@ class Kerr(object):
         
         return corr/N
 
-    def wigner(z):
+    def wigner(self, z):
         """
         The Wigner function
 
@@ -206,19 +199,12 @@ class Kerr(object):
             The real valued Wigner function.
         """        
         f, g, c = self.f, self.g, self.c
-
-        if self.N is None:
-            self.N, self.m = self.normalization()
-            N = self.N
-            m = self.m
-
-        else:
-            N = self.N
-            m = self.m
+        m = self.m
+        N = self.N
 
         _wigner = 0
 
-        coefficient = lambda x: np.pow(2*z.conjugate(), m)/factorial(x)
+        coefficient = lambda x: np.power(2*z.conjugate(), m)/factorial(x)
         generator = (coefficient(idx) * self.fm(idx) for idx in range(m))
 
         for term in generator:
